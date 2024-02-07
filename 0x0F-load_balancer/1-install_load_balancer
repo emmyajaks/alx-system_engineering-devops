@@ -1,59 +1,49 @@
 #!/usr/bin/env bash
 # install load balancer
 
+# Update package repositories
+sudo apt update
 
-echo -e "Updating and doing some minor checks...\n"
+# Install HAProxy
+sudo apt install -y haproxy
 
-function install() {
-	command -v "$1" &> /dev/null
-
-	#shellcheck disable=SC2181
-	if [ $? -ne 0 ]; then
-		echo -e "	Installing: $1\n"
-		sudo apt-get update -y -qq && \
-			sudo apt-get install -y "$1" -qq
-		echo -e "\n"
-	else
-		echo -e "	${1} is already installed.\n"
-	fi
-}
-
-install haproxy #install haproxy
-
-echo -e "\nSetting up some minor stuff.\n"
-
-# backup default server config file
-sudo cp /etc/haproxy/haproxy.cfg haproxy_default.backup
-
-server_config=\
-"
-defaults
-  mode http
-  timeout client 15s
-  timeout connect 10s
-  timeout server 15s
-  timeout http-request 10s
-
-frontend clickviral-tech-frontend
-    bind *:80
-    default_backend clickviral-tech-backend
-
-backend clickviral-tech-backend
-    balance roundrobin
-    server 437972-web-01 100.26.217.232 check
-    server 437972-web-02 3.85.196.97 check
-"
-
-# shellcheck disable=SC2154
-echo "$server_config" | sudo dd status=none of=/etc/haproxy/haproxy.cfg
-
-# enable haproxy to be started by init script
-echo "ENABLED=1" | sudo dd status=none of=/etc/default/haproxy
-
-echo "configured - Roundrobin On web-01 & web-02"
-
-if [ "$(pgrep -c haproxy)" -le 0 ]; then
-	sudo service haproxy start
-else
-	sudo service haproxy restart
+# Verify HAProxy installation
+if [ $(dpkg-query -W -f='${Status}' haproxy 2>/dev/null | grep -c "ok installed") -eq 0 ]; then
+    echo "HAProxy installation failed. Exiting."
+    exit 1
 fi
+
+# Configure HAProxy
+sudo mv /etc/haproxy/haproxy.cfg /etc/haproxy/haproxy.cfg.backup
+
+# Define HAProxy configuration
+haproxy_config="
+defaults
+    timeout client 30s
+    timeout server 30s
+    timeout connect 5s
+
+frontend http_front
+    bind *:80
+    mode http
+    default_backend http_back
+
+backend http_back
+    mode http
+    balance roundrobin
+    timeout server 30s
+    server 437972-web-01 100.26.217.232:80 check
+    server 437972-web-02 3.85.196.97:80 check
+"
+
+# Write HAProxy configuration to file
+echo "$haproxy_config" | sudo tee /etc/haproxy/haproxy.cfg > /dev/null
+
+# Enable HAProxy to be managed via init script
+echo "ENABLED=1" | sudo tee /etc/default/haproxy > /dev/null
+
+# Restart HAProxy
+sudo service haproxy restart
+
+# Verify HAProxy status
+sudo service haproxy status
