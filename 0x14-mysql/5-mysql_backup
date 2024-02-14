@@ -31,8 +31,5 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Remove MySQL dump file
-rm "$backup_file"
-
 echo "Backup completed: $archive_file"
 
