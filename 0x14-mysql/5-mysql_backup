@@ -1,9 +1,38 @@
 #!/usr/bin/env bash
 # Create MySQL server backup
 
-PASS="$1"
-DATE=$(date +%d-%m-%Y)
+# Check if the password argument is provided
+if [ $# -ne 1 ]; then
+    echo "Usage: $0 <mysql_password>"
+    exit 1
+fi
 
-mysqldump -uroot -p"$PASS" --opt --all-databases > backup.sql
+# MySQL dump filename
+backup_file="backup.sql"
 
-tar -cvzf "$DATE".tar.gz backup.sql 
+# Compressed archive filename
+archive_file="$(date +'%d-%m-%Y').tar.gz"
+
+# MySQL dump command
+mysqldump -u root -p"$1" --all-databases > "$backup_file"
+
+# Check if mysqldump command was successful
+if [ $? -ne 0 ]; then
+    echo "MySQL dump failed. Exiting..."
+    exit 1
+fi
+
+# Create compressed archive
+tar -czvf "$archive_file" "$backup_file"
+
+# Check if tar command was successful
+if [ $? -ne 0 ]; then
+    echo "Creating archive failed. Exiting..."
+    exit 1
+fi
+
+# Remove MySQL dump file
+rm "$backup_file"
+
+echo "Backup completed: $archive_file"
+
